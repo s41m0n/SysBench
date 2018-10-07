@@ -1,0 +1,177 @@
+%----------------------------------------------------------------------------------------
+%	PACKAGES AND OTHER DOCUMENT CONFIGURATIONS
+%----------------------------------------------------------------------------------------
+
+\documentclass[
+12pt,
+singlespacing,
+headsepline,
+]{BachelorThesis} % The class file specifying the document structure
+
+\usepackage[utf8]{inputenc} % Required for inputting international characters
+\usepackage[T1]{fontenc} % Output font encoding for international characters
+\usepackage{listings}
+\usepackage{soul}
+\usepackage{adjustbox}
+\usepackage{caption}
+\usepackage{bm}
+\usepackage[titletoc,title]{appendix}
+\usepackage[backend=biber,style=authoryear,natbib=true,sorting=none]{biblatex} % Use the bibtex backend with the authoryear citation style (which resembles APA)
+\captionsetup[figure]{font=footnotesize,labelfont=footnotesize}
+\captionsetup[table]{font=footnotesize,labelfont=footnotesize}
+\addbibresource{bibliography.bib} % The filename of the bibliography
+
+\usepackage[autostyle=true]{csquotes} % Required to generate language-dependent quotes in the bibliography
+
+%----------------------------------------------------------------------------------------
+%	MARGIN SETTINGS
+%----------------------------------------------------------------------------------------
+
+\geometry{
+	paper=a4paper, % Change to letterpaper for US letter
+	inner=2.5cm, % Inner margin
+	outer=3.8cm, % Outer margin
+	bindingoffset=.5cm, % Binding offset
+	top=1.5cm, % Top margin
+	bottom=1.5cm, % Bottom margin
+}
+
+%----------------------------------------------------------------------------------------
+%	THESIS INFORMATION
+%----------------------------------------------------------------------------------------
+
+\thesistitle{Analisi delle prestazioni del\\\emph{Linux Kernel Runtime Guardian}}
+\supervisor{Gabriele \textsc{D'Angelo}}
+\degree{Ingegneria e Scienze Informatiche}
+\author{Simone \textsc{Magnani}}
+\university{\href{https://www.unibo.it/it}{Alma Mater Studiorum-Università di Bologna}}
+\department{\href{http://www.informatica.unibo.it/it/Dipartimento/sedi-del-dipartimento/unita-organizzativa-di-cesena}{Campus di Cesena}}
+\group{Programmazione di Reti}
+\faculty{\href{https://corsi.unibo.it/laurea/IngegneriaScienzeInformatiche}{Scuola di Scienze}}
+
+\AtBeginDocument{
+\hypersetup{pdftitle=\ttitle} % Set the PDF's title to your title
+\hypersetup{pdfauthor=\authorname} % Set the PDF's author to your name
+\hypersetup{hidelinks}
+}
+
+\begin{document}
+
+\frontmatter % Use roman page numbering style (i, ii, iii, iv...) for the pre-content pages
+
+\nocite{*}
+
+\pagestyle{plain} % Default to the plain heading style until the thesis style is called for the body content
+
+%----------------------------------------------------------------------------------------
+%	TITLE PAGE
+%----------------------------------------------------------------------------------------
+
+\begin{titlepage}
+\begin{center}
+
+\vspace*{.06\textheight}
+{\scshape\large \univname\par\deptname\par\facname\par}\vspace{1.5cm} % University name
+\textsc{\large Corso di laurea in \degreename}\\[0.5cm] % Thesis type
+
+\HRule \\[0.4cm] % Horizontal line
+{\huge \bfseries \ttitle\par}\vspace{0.4cm} % Thesis title
+\HRule \\[1.5cm] % Horizontal line
+ 
+\vfill
+
+\large \textit{Relazione finale in}\\[0.3cm] % University requirement text
+\groupname\\[2cm] % Research group name and department name
+
+\begin{minipage}[t]{0.4\textwidth}
+\begin{flushleft} \large
+\emph{Presentata da:}\\
+\href{https://www.linkedin.com/in/simone-magnani-564830151/}{\authorname} % Author name
+
+\end{flushleft}
+\end{minipage}
+\begin{minipage}[t]{0.4\textwidth}
+\begin{flushright} \large
+\emph{Relatore:} \\
+\href{http://www.cs.unibo.it/~gdangelo/}{\supname} % Supervisor name
+\end{flushright}
+\end{minipage}\\[3cm]
+ 
+\vfill
+
+{\large Sessione II}\\ % Session
+{\large Anno Accademico 2017/2018}\\[4cm] % Academic Year
+ 
+\vfill
+\end{center}
+\end{titlepage}
+
+\cleardoublepage
+
+%----------------------------------------------------------------------------------------
+%	QUOTATION PAGE
+%----------------------------------------------------------------------------------------
+
+\include{Chapters/Quote}
+
+%----------------------------------------------------------------------------------------
+%	ABSTRACT PAGE
+%----------------------------------------------------------------------------------------
+
+\include{Chapters/Abstract}
+\cleardoublepage
+
+%----------------------------------------------------------------------------------------
+%	PREFACE PAGE
+%----------------------------------------------------------------------------------------
+
+\include{Chapters/Preface}
+\cleardoublepage
+
+%----------------------------------------------------------------------------------------
+%	LIST OF CONTENTS/FIGURES/TABLES PAGES
+%----------------------------------------------------------------------------------------
+
+\tableofcontents % Prints the main table of contents
+\listoffigures % Prints the list of figures
+\listoftables % Prints the list of tables
+
+%----------------------------------------------------------------------------------------
+%	THESIS CONTENT - CHAPTERS
+%----------------------------------------------------------------------------------------
+
+\mainmatter % Begin numeric (1,2,3...) page numbering
+
+\pagestyle{thesis} % Return the page headers back to the "thesis" style
+
+% Include the chapters of the thesis as separate files from the Chapters folder
+
+\include{Chapters/Introduction}
+\include{Chapters/Lkrg}
+\include{Chapters/SysBench}
+\include{Chapters/Analysis}
+\include{Chapters/Sumup}
+
+%----------------------------------------------------------------------------------------
+%	APPENDIX
+%----------------------------------------------------------------------------------------
+
+\setcounter{section}{0}
+\renewcommand{\thesection}{A.\arabic{section}}%
+\include{Appendices/AppendixA}
+
+%----------------------------------------------------------------------------------------
+%	ACKNOWLEDGEMENTS
+%----------------------------------------------------------------------------------------
+
+\include{Chapters/Acknowledgements}
+
+%----------------------------------------------------------------------------------------
+%	BIBLIOGRAPHY
+%----------------------------------------------------------------------------------------
+
+\printbibliography[heading=bibintoc]
+
+%----------------------------------------------------------------------------------------
+
+\end{document}  

@@ -1,0 +1,54 @@
+% Appendix A
+
+\addchap{Appendice A} % Main appendix title
+
+\label{AppendixA} % For referencing this appendix elsewhere, use \ref{AppendixA}
+
+Per compilare il progetto SysBench e \emph{Linux Kernel Runtime Guardian} sono necessari vari strumenti ottenibili mediante il proprio gestore di pacchetti. Le distribuzioni presentare sfruttano lo stesso comando per scaricare ed installare nuovi pacchetti nel proprio sistema, ovvero \emph{apt}.
+
+Una volta scaricata ed installata a piacere la propria distribuzione, aprire il terminale e tramite il comando \emph{sudo apt install} (nel nostro caso) installare:
+
+\begin{itemize}
+\item linux-headers-\$(uname -r), necessario al fine della compilazione del kernel e la build dei moduli (\$(uname -r) viene sostituito dalla versione attuale del proprio kernel, al fine di ottenere i giusti headers);
+\item build-essential, comprende il compilatore gcc e make, necessari per la compilazione dei software;
+\item libelf-dev, per la lettura e scrittura dei file ELF (eseguibili) ad alto livello.
+\end{itemize}
+
+A questo punto il sistema è configurato per la compilazione corretta dei due software.
+
+\section{Installazione del \emph{Linux Kernel Runtime Guardian}}
+
+Per installare LKRG nel proprio sistema è necessario seguire le seguenti istruzioni:\\\\
+1.Scaricare LKRG al seguente link ufficiale \url{https://www.openwall.com/lkrg/}. \\
+2.Accedere tramite terminale alla directory in cui si trova: \emph{cd path\_to\_dir}.\\
+3.Estrarre il contenuto del file .zip: \emph{tar -xzvf lkrg-0.4.tar.zip}.\\
+4.Entrare nella cartella creata: \emph{cd lkrg-0.4}.\\
+5.Compilare il progetto: \emph{make -j8}\\
+6.Entrare nella cartella di output: \emph{cd output}\\
+7.Caricare la versione .ko ottenuta in seguito alla compilazione del modulo: \emph{sudo insmod output/p\_lkrg.ko p\_init\_log\_level=3}, dove \emph{p\_init\_log\_level} è il parametro in ingresso tramite il quale si decide il livello di logging delle informazioni in console (e non nel terminale, bensì nell'esecuzione del proprio sistema in modalità console e non desktop, accedendovi premendo CTRL+ALT+F7).\\
+8.Controllare che LKRG sia stato effettivamente caricato: \emph{lsmod | grep p\_lkrg}.\\
+
+Per rimuoverlo dal kernel è sufficiente utilizzare \emph{sudo rmmod p\_lkrg} e controllare che sia stato rimosso.
+
+In caso vi fossero problemi con la compilazione del modulo, contattare l'autore tramite la mailing list presente nel sito indicato precedentemente.
+
+\section{Installazione di \emph{SysBench}}
+
+Il procedimento per installare SysBench è il seguente:\\\\
+1.Accedere al mio repository online tramite browser e copiare l'indirizzo fornito cliccando il tasto \emph{clone}.\\
+2.Clonare il repository nel proprio computer digitando da terminale: \emph{git clone https://SimoMagno@bitbucket.org/SimoMagno/sysbench.git}.\\
+3.Accedere alla cartella clonata: \emph{cd sysbench}.\\
+4.Compilare il progetto: \emph{make}.
+
+A questo punto il progetto è eseguibile e si può lanciare in due maniere presentate:
+
+\begin{itemize}
+\item singola esecuzione : \emph{[sudo] ./sysbench ncycle filename};
+\item multipla esecuzione: \emph{sudo ./script.sh ntimes ncycle path/to/p\_lkrg.ko}
+\end{itemize}
+
+Il primo scenario è il normale caso di esecuzione di programma da riga di comando, in cui viene richiamato passando i parametri \emph{ncycle} (intero) e \emph{filename} (stringa); viene eseguito un singolo benchmark in cui ogni system call viene chiamata ncycle-volte ed il risultato è salvato nel file indicato. Da notare che in questo il programma può essere eseguito sia con i privilegi sia senza, in quanto la parte di caricamento/rimozione del modulo LKRG nel kernel è stata volutamente lasciata a carico dell'utente.
+
+Nel secondo caso, il programma viene lanciato ntimes-volte producento altrettanto file di output, ognuna delle quali effettua il test delle system call invocate ncycle-volte. La differenza sostanziale consiste nel tempo d'esecuzione medio e totale delle chiamate a funzione: si è osservato infatti che per valutare il tempo medio d'esecuzione di una system call è più preciso effettuare ntimes-volte il benchmark con parametro ncycle=1, in quanto se la stessa funzione è richiamata più volte all'interno dello stesso programma possono esserci dei salvataggi in cache e miglioramenti apportati dalla glibc, dalla cache o dal processore, i quali alterano i risultati come mostrato nel Capitolo 4. Per questa tipologia d'esecuzione sono necessari i privilegi di root, in quanto il caricamento e rimozione di LKRG è a carico dello script ogni volta che SysBench viene eseguito.
+
+Per qualsiasi tipo di informazione o chiarimento sentitevi liberi di contattarmi.

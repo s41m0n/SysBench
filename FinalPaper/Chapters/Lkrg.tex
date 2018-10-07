@@ -1,0 +1,191 @@
+\chapter{Il progetto \emph{Linux Runtime Guardian Kernel}}
+
+\label{Chapter2}
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[scale=0.15]{Figures/Lkrg}
+\caption[Logo del software Linux Runtime Guardian Kernel]{Logo del software Linux Runtime Guardian Kernel\\Fonte: \href{https://openwall.info/wiki/p_lkrg/Main}{\url{https://openwall.info}}}
+\label{fig:Lkrg}
+\end{figure}
+
+
+LKRG è un software gratuito Open Source sviluppato da Adam 'pi3' Zabrocki, un dipendente della Microsoft amante della sicurezza informatica. Si può ottenere in 3 forme differenti: la versione a pagamento, quella 'light' oppure quella sperimentale, la quale differisce per le funzionalità introdotte, nonostante la possibile presenza di bug.
+
+Come sottolinea nella pagina di documentazione l'autore, LKRG è ancora lontano dall'essere una soluzione perfetta per la sicurezza del kernel (può essere bypassato), ma un corretto uso soprattutto se installato in un sistema stabile e non già compromesso potrebbe migliorarne l'integrità e la sicurezza. Infatti gli obiettivi di questo modulo sono:
+
+\begin{itemize}
+\item prevenire le modifiche non supportate al kernel, inserendo delle regole da rispettare, grazie alle quali qualsiasi patch prima di entrare in funzionamento deve essere validata;
+\item rilevare con successo un'exploit del kernel, bloccando il processo malevolo ed annullando le modifiche apportate.
+\end{itemize}
+
+Per garantire queste \emph{feature}, LKRG sfrutta un proprio database interno contenente i valori \emph{hash} calcolati in base alle regioni ed i parametri del kernel più importanti da controllare.
+
+%----------------------------------------------------------------------------------------
+%	GUARDED REGIONS
+%----------------------------------------------------------------------------------------
+\section{Regioni controllate ed eventi scatenanti}
+
+Le regioni del sistema controllate sono:
+
+\begin{itemize}
+\item i moduli caricati e tutti i loro attributi (puntatori alle strutture dati, etc.);
+\item l'unità di input-output (IOMMU);
+\item tutta la sezione del kernel di sola lettura (.rodata);
+\item le eccezioni del kernel;
+\item tutta la sezione .text del kernel (dove vi è la tabella delle system call, le funzioni, le procedure, etc.)
+\item dati critici della CPU e dei singoli core.
+\end{itemize}
+
+A differenza delle altre regioni, l'ultima che concerne la CPU è la parte più critica del progetto. Bisogna tener conto di vari scenari d'utilizzo, supponendo una possibile aggiunta o rimozione a runtime di più core, i quali devono necessariamente essere controllati singolarmente; infatti i controlli d'integrità vengono effettuati su ogni componente, ricalcolando gli hash ed aggiornanando il database, al fine di avere dei dati precisi del sistema. Queste problematiche si possono presentare sia in un'installazione fisica del sistema operativo, sia in una sua virtualizzazione: in quest'ultimo scenario risulta molto semplice cambiare i parametri hardware da virtualizzare, dunque affinchè LKRG sia versatile deve assolutamente prendere in considerazione tale regione del sistema nei suoi minimi particolari.
+
+I controlli d'integrità delle varie aree sono scatenati da eventi ritenuti più o meno a rischio dal sistema, secondo delle percentuali assegnate. La routine di controllo è eseguita:
+
+\begin{itemize}
+\item dagli interrupt del timer interno al kernel, il quale genera e inserisce nella \emph{working queue} i cosiddetti \emph{work item};
+\item su richiesta tramite un comando dedicato ricevuto tramite il canale di comunicazione (sysctl);
+\item ogni volta che è rilevata l'attività di un modulo;
+\item ogni volta che viene rilevato un nuovo core attivo, sia fisico che virtuale;
+\item in base a vari eventi di sistema riportati nella tabella sottostante.
+\end{itemize}
+
+\clearpage
+
+\begin{table}[!htbp]
+\label{tab:sysevents}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Evento} & \textbf{Probabilità}\\
+\hline
+CPU idle & 0.005 \\
+CPU frequency & 10 \\ 
+CPU power management & 10 \\ 
+Network device & 1 \\ 
+Network event & 5 \\ 
+Network device IPv4 changes & 50 \\ 
+Network device IPv6 changes & 50 \\
+Task structure handing off & 0.01 \\
+Task going out & 0.01 \\
+Task calling \emph{do\_munmap()} & 0.005 \\ [1ex] 
+USB changes & 50 \\ 
+Global AC events & 50 \\ 
+\hline
+\end{tabular}
+\caption{Eventi di sistema e probabilità d'attivazione}
+\end{table}
+
+Nonostante la tabella possa subire variazioni in seguito ad aggiornamenti del software, si può osservare come per ora LKRG abbia fissato delle percentuali relativamente basse per determinate categorie di eventi, mentre per altri è stata data maggiore importanza assegnando persino un 50\% di possibilità di scatenare un controllo.
+
+%----------------------------------------------------------------------------------------
+%	THREAT MODEL
+%----------------------------------------------------------------------------------------
+\section{Modello delle minacce}
+
+Per definire un modello di minacce che LKRG deve prendere in considerazione, si sono supposti i seguenti 3 scenari:
+
+\begin{enumerate}
+\item attacco al kernel dalla boot-chain (avvio del sistema);
+\item attacco al kernel tramite le sue vulnerabilità note;
+\item attacco al kernel persistente, come l'utilizzo di una backdoor.
+\end{enumerate}
+
+Nel primo caso ci si trova dinanzi ad uno scenario fuori dall'obiettivo di LKRG, molto meno noto di altri attacchi famosi e più complicato da applicare. Infatti l'attaccante ha come obiettivo quello di compromettere il sistema durante le prime fasi di start-up, quando ancora il kernel (e quindi anche il modulo) non è stato inizializzato del tutto.
+
+Il secondo caso è in parte coperto dal software e viene trattato nella prossima sezione; consiste in una scrittura (malevola) nella memoria del kernel grazie alla quale un attaccante è in grado di sovrascrivere i processi da eseguire (e quindi alterare il flow d'esecuzione) oppure acquisire privilegi per esecuzione di comandi che un normale utente non potrebbe lanciare.
+
+Gli attacchi persistenti sono l'argomento più sensibile, in quanto è impossibile proteggere interamente il kernel da tutte le possibili modifiche, ma esse possono essere limitate se si definisce il concetto di 'modifica non supportata'. Linux non nasce come un sistema in grado di proteggersi dalle 'wild modifications', ed il kernel è un blocco di codice monolitico in grado di apportare cambiamenti autonomamente. Questo dettaglio va in contrasto con il primo degli obiettivi di LKRG, pertanto al fine di garantire un buon livello di protezione il modulo deve:
+
+\begin{itemize}
+\item supportare solo le modifiche legittime del kernel (*\_JUMP\_LABEL);
+\item bloccare la funzionalità di caricamento ed rimozione dei moduli (senza i privilegi di root), creando un canale sicuro di comunicazione tra utente e kernel per questo tipo di funzionalità;
+\item imporre l'esecuzione dei controlli d'integrità in determinate situazioni.
+\end{itemize}
+
+Le *\_JUMP\_LABEL (in assembly language 'goto label') sono un meccanismo a basso livello di programmazione molto utile, grazie al quale è possibile saltare da una parte all'altra del codice. Un esempio d'uso sono i tracepoint o le stringhe di debug, le quali a seconda del relativo parametro vengono visualizzate o meno nel corso dell'esecuzione del kernel. Se avviene una modifica alla sezione .text del kernel dovuta ad una di queste label, LKRG esegue i seguenti controlli:
+
+\begin{itemize}
+\item se l'istruzione 'NOP' ('no operation' in assembly language) viene modificata in 'jmp', essa viene codificata per controllare che il puntatore al target dell'istruzione sia interno alla funzione stessa, ovvero che condivida lo stesso spazio dei simboli (nel caso fosse così, viene considerata legittima);
+\item nel caso fosse 'jmp' ad essere modificata, l'unico cambiamento permesso è un'instruzione di 'NOP'.
+\end{itemize}
+
+Se il kernel è compilato senza l'opzione che abilita le *\_JUMP\_LABEL, ovvero CONFIG\_JUMP\_LABEL=n, non vi è bisogno di effettuare tali controlli, in quanto essendo disabilitate non gli permettono di automodificarsi, rendendolo molto più statico, predittivo e più semplice da calcolarne gli hash per il database di LKRG.
+
+\subsection{Branch sperimentale}
+
+Creando un nuovo canale di comunicazione tra l'utente ed il kernel LKRG crea nuovi potenziali vettori di attacco in modalità utente, che si possono riassumere in attacchi:
+
+\begin{enumerate}
+\item ai processi utente;
+\item ai file su disco;
+\item ai processi tramite accesso diretto agli indirizzi di memoria;
+\item ai file tramite accesso diretto al disco;
+\item ai processi tramite le librerie condivise (definiti attacchi 'intermedi').
+\end{enumerate}
+
+Al fine di evitare attacchi del primo tipo, LKRG definisce un set di 'protected process' salvato in memoria come 'red-black tree' (albero binario autobilanciato), garantendo che nessun processo in user mode riesca a cambiare lo stato dei processi in esecuzione. In aggiunta, dato che nessuno in modalità utente (incluso 'root') è in grado di vedere questa tipologia di processi, solo uno 'protected' è in grado di stabilire una connessione con terze parti.
+
+Simile al caso precedente, gli attacci ai file su disco vengono prevenuti creando un subset di file definiti anch'essi 'protected'. Il loro contenuto è pertanto inalterabile per tutte le esecuzioni in user mode, mentre la lettura è permessa solamente se l'utente proprietario del file ha assegnato i privilegi necessari all'utente che richiede tale operazione.
+
+Per quanto riguarda gli scenari di attacco tramite indirizzi definiti 'raw', LKRG forza tutti i processi esclusi quelli 'protected' a cedere la loro capacità CAP\_SYS\_RAWIO, ovvero il permesso grazie al quale possono eseguire operazioni di input/output direttamente con gli indirizzi di memoria e non tramite interfacce. Questa tipologia d'attacco è comunque possibile, in quanto non vi è alcun modo di bloccare gli accessi 'raw' al disco, ed anche senza il permesso CAP\_SYS\_RAWIO un attaccante con i giusti privilegi sarebbe in grado di aprire i file situati in \emph{/dev/sda[0-x]} ed inserire del proprio codice all'interno.
+
+L'ultimo vettore d'attacco può essere contrastato in due maniere differenti: la prima consiste nel compilare staticamente tutto il codice compreso quelli di libreria, mentre un modo proposto da LKRG è quello di definire ogni file di libreria 'protected', con l'obiettivo di impedire l'accesso ad altri processi tramite possibili bug in tale codice.
+
+Infine, un'ulteriore risorsa per il controllo d'integrità sono i file di log che LKRG genera ogni volta che rileva un'inconsistenza nel kernel. Per evitare che un attaccante ripulisca i file di log ed alteri lo stato del kernel, viene salvato un altro set di file definiti 'append', con i quali è possibile ricostruire lo stato del sistema. Mentre rimane possibile appendere informazioni in questi file, il modulo vieta la sovrascrittura e la modifica del loro contenuto, per mantenere informazioni consistenti.\\\par
+
+Una breve nota da fare: per interagire con LKRG bisogna essere amministratori di sistema (esempio 'root') e ciò implica l'introduzione di un possibile vettore d'attacco, consistente nella tecnica nota di 'privileges excalation', grazie alla quale solitamente tramite una falla in un servizio si riesce ad ottenere i privilegi di root.
+
+%----------------------------------------------------------------------------------------
+%	EXPLOIT DETECTION
+%----------------------------------------------------------------------------------------
+\section{Rilevazione degli attacchi}
+
+Questa sezione ricopre il secondo obiettivo prefissato di LKRG, ovvero la rilevazione di un attacco e la successiva chiusura del processo. Per garantire integrità al sistema, vengono monitorati diversi parametri importanti assegnati ai singoli task (processi o thread), che non possono subire variazione durante l'esecuzione del programma. Tali parametri sono:
+
+\begin{itemize}
+\item puntatore alla struttura del task;
+\item pid (process identifier);
+\item nome del processo;
+\item puntatore alla struttura 'cred';
+\item puntatore alla struttura 'real\_cred';
+\item UID (user identifier);
+\item GID (group identifier);
+\item EUID (effective user identifier);
+\item EGID(effective group identifier);
+\item SUID (set user identifier);
+\item SGID (set group identifier);
+\item FSUID (file system user identifier);
+\item FSGID (file system group identifier);
+\item SECCOMP (secure computing with filters);
+\item SELinux (security-enhanced Linux), variabili selinux\_enable e selinux\_enforcing.
+\end{itemize}
+
+Non è necessario che l'utente conosca tutti questi attributi; è sufficiente essere consapevoli che molti di essi possono essere modificati tramite varie system call, e quindi da un programma utente. Quando viene invocata una chiamata di sistema il cui scopo è quello di alterare questi parametri, LKRG intercetta l'esecuzione della funzione compiendo i propri controlli degli attributi non solo del processo chiamante, ma di tutti quelli presenti nel sistema (un attaccante esperto potrebbe utilizzare una falla in un servizio X per arrivare ad alterare il servizio Y). Le system call che scatenano tali controlli sono:
+
+\begin{itemize}
+\item setfsgid;
+\item setfsuid;
+\item setregid;
+\item setreuid;
+\item setgid;
+\item setuid;
+\item setresgid;
+\item setresuid;
+\item setgroups;
+\item exit;
+\item fork;
+\item execve;
+\item init\_module (o finit\_module, caricamento modulo nel kernel);
+\item delete\_module (rimozione modulo dal kernel);
+\item may\_open (eseguita quando l'utente vuole aprire una risorsa nel sistema);
+\end{itemize}
+
+Le funzioni \emph{setX} sono invocate per modificare il corrispondente attributo \emph{X} contenuto nel nome della funzione. \emph{init\_module} e \emph{delete\_module} servono per caricare o rimuovere moduli del kernel come mostrato nel Capitolo I, e richiedono i privilegi di root affinchè la loro chiamata termini con successo.
+
+Con la \emph{fork()} è possibile creare un processo definito 'child' (figlio) dal processo 'padre' in esecuzione, il quale avrà una copia esatta dello spazio degli indirizzi del padre (ed il programma è il medesimo), nonostante essi siano ovviamente in due locazioni diverse di memoria. I due processi continueranno la loro esecuzione dall'istruzione successiva alla chiamata di sistema.
+
+Fortemente utilizzata è la system call \emph{exit()}, con la quale avviene la terminazione istantanea del processo chiamante, la chiusura di tutti i file descriptor aperti appartenenti ad esso e la chiusura di tutti i suoi 'child process'.
+
+Ultima ma non per importanza, \emph{execve()} esegue il programma passato come primo parametro, sovrascrivendo tutto lo spazio dedicato al processo chiamante, reinizializzando le memorie ad esso associate (stack, heap); è necessario che il file da eseguire puntato dal primo argomento passato alla funzione sia un eseguibile o uno script in cui sia indicato l'interprete da utilizzare, altrimenti l'esecuzione fallisce.
+
+Questo elenco di system call monitorate è aggiornato alla versione più recente del software (v.0.4) ma non è definitivo, in quanto potrà subire future modifiche in seguito ad aggiornamenti.
