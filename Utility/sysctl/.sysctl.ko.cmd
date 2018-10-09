@@ -1,0 +1,1 @@
+cmd_/media/sf_Shared/sysctl/sysctl.ko := ld -r -m elf_x86_64 -T /usr/src/linux-headers-3.11.0-15-generic/scripts/module-common.lds --build-id  -o /media/sf_Shared/sysctl/sysctl.ko /media/sf_Shared/sysctl/sysctl.o /media/sf_Shared/sysctl/sysctl.mod.o
